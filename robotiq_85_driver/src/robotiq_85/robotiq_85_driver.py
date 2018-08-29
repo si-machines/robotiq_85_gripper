@@ -47,11 +47,15 @@ arising out of or based upon:
 
  \Platform: Linux/ROS Indigo
 --------------------------------------------------------------------"""
+import time
+import numpy as np
+
+import rospy
+from sensor_msgs.msg import JointState
+
 from robotiq_85_gripper import Robotiq85Gripper
 from robotiq_85_msgs.msg import GripperCmd, GripperStat
-from sensor_msgs.msg import JointState
-import numpy as np
-import rospy
+
 
 class Robotiq85Driver:
     def __init__(self):
@@ -59,10 +63,18 @@ class Robotiq85Driver:
         self._comport = rospy.get_param('~comport','/dev/ttyUSB0')
         self._baud = rospy.get_param('~baud','115200')
 
-        self._gripper = Robotiq85Gripper(self._num_grippers,self._comport,self._baud)
-
-        if not self._gripper.init_success:
-            rospy.logerr("Unable to open commport to %s" % self._comport)
+        connected = False
+        printed = False
+        while not connected and not rospy.is_shutdown():
+            self._gripper = Robotiq85Gripper(self._num_grippers,self._comport,self._baud)
+            connected = self._gripper.init_success
+            if not self._gripper.init_success:
+                if not printed:
+                    rospy.logerr("Unable to open commport to %s while connecting to Robotiq 85 gripper. Will keep trying..." % self._comport)
+                    printed = True
+                rospy.sleep(1.0)
+        if rospy.is_shutdown():
+            print("ROS shutdown while connecting to Robotiq 85 gripper")
             return
             
         if (self._num_grippers == 1):
@@ -86,15 +98,22 @@ class Robotiq85Driver:
         self._driver_state = 0
         self._driver_ready = False
         
-        success = True
-        for i in range(self._num_grippers):
-            success &= self._gripper.process_stat_cmd(i)
-            if not success:
-                bad_gripper = i
-        if not success:
-            rospy.logerr("Failed to contact gripper %d....ABORTING"%bad_gripper)
-            return                
-                
+        connected = False
+        printed = False
+        while not connected and not rospy.is_shutdown():
+            connected = True
+            for i in range(self._num_grippers):
+                connected &= self._gripper.process_stat_cmd(i)
+                if not connected and not printed:
+                    rospy.logerr("Failed to contact gripper %d. Will keep trying..."%i)
+            if not connected:
+                printed = True
+                rospy.sleep(1.0)
+        if rospy.is_shutdown():
+            print("ROS shutdown while connecting to Robotiq 85 gripper")
+            return
+
+        rospy.loginfo("Robotiq 85 driver(s) connected successfully.")
         self._run_driver()
         
     def _clamp_cmd(self,cmd,lower,upper):
