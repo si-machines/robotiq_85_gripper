@@ -68,9 +68,9 @@ class Robotiq85Driver:
         while not connected and not rospy.is_shutdown():
             self._gripper = Robotiq85Gripper(self._num_grippers,self._comport,self._baud)
             connected = self._gripper.init_success
-            if not self._gripper.init_success:
+            if not connected:
                 if not printed:
-                    rospy.logerr("Unable to open commport to %s while connecting to Robotiq 85 gripper. Will keep trying..." % self._comport)
+                    rospy.logerr("Unable to open comport to %s while connecting to Robotiq 85 gripper. Will keep trying..." % self._comport)
                     printed = True
                 rospy.sleep(1.0)
         if rospy.is_shutdown():
@@ -103,7 +103,7 @@ class Robotiq85Driver:
         while not connected and not rospy.is_shutdown():
             connected = True
             for i in range(self._num_grippers):
-                connected &= self._gripper.process_stat_cmd(i)
+                connected &= self._gripper.process_cmds(i)
                 if not connected and not printed:
                     rospy.logerr("Failed to contact gripper %d. Will keep trying..."%i)
             if not connected:
@@ -124,8 +124,7 @@ class Robotiq85Driver:
         else:
             return cmd
 
-    def _update_gripper_cmd(self,cmd):
-
+    def _update_gripper_cmd(self,cmd,dev=0):
         if (True == cmd.emergency_release):
             self._gripper.activate_emergency_release(open_gripper=cmd.emergency_release_dir)
             return
@@ -133,30 +132,21 @@ class Robotiq85Driver:
             self._gripper.deactivate_emergency_release()
 
         if (True == cmd.stop):
-            self._gripper.stop()
+            self._gripper.stop(dev=dev)
         else:
-            pos = self._clamp_cmd(cmd.position,0.0,0.085)
-            vel = self._clamp_cmd(cmd.speed,0.013,0.1)
-            force = self._clamp_cmd(cmd.force,5.0,220.0)
-            self._gripper.goto(dev=0,pos=pos,vel=vel,force=force)
+            pos = self._clamp_cmd(cmd.position,0.0,1.0)
+            vel = self._clamp_cmd(cmd.speed,0.0, 255.0)
+            force = self._clamp_cmd(cmd.force,0.0,225.0)
+            self._gripper.goto(dev=dev,pos=pos,vel=vel,force=force)
 
     def _update_right_gripper_cmd(self,cmd):
+        self._update_gripper_cmd(dev=1)
 
-        if (True == cmd.emergency_release):
-            self._gripper.activate_emergency_release(dev=1,open_gripper=cmd.emergency_release_dir)
-            return
-        else:
-            self._gripper.deactivate_emergency_release(dev=1)
+    def _create_gripper_stat_msg(self, dev):
+        """
+        create a GripperState ROS message based on current status of gripper
+        """
 
-        if (True == cmd.stop):
-            self._gripper.stop(dev=1)
-        else:
-            pos = self._clamp_cmd(cmd.position,0.0,0.085)
-            vel = self._clamp_cmd(cmd.speed,0.013,0.1)
-            force = self._clamp_cmd(cmd.force,5.0,220.0)
-            self._gripper.goto(dev=1,pos=pos,vel=vel,force=force)
-
-    def _update_gripper_stat(self,dev=0):
         stat = GripperStat()
         stat.header.stamp = rospy.get_rostime()
         stat.header.seq = self._seq[dev]
@@ -171,13 +161,16 @@ class Robotiq85Driver:
         self._seq[dev]+=1
         return stat
 
-    def _update_gripper_joint_state(self,dev=0):
+    def _create_joint_state_msg(self, dev):
+        """
+        Create a JointState message based on the current status of the gripper
+        """
         js = JointState()
         js.header.frame_id = ''
         js.header.stamp = rospy.get_rostime()
         js.header.seq = self._seq[dev]
         js.name = ['gripper_finger1_joint']
-        pos = np.clip(0.8 - ((0.8/0.085) * self._gripper.get_pos(dev)), 0., 0.8)
+        pos = self._gripper.get_pos(dev)
         js.position = [pos]
         dt = rospy.get_time() - self._prev_js_time[dev]
         self._prev_js_time[dev] = rospy.get_time()
@@ -207,27 +200,27 @@ class Robotiq85Driver:
                 self._driver_ready = True
 
             for i in range(self._num_grippers):
-                success = True
-                success &= self._gripper.process_act_cmd(i)
-                success &= self._gripper.process_stat_cmd(i)
-                if not success:
-                    rospy.logerr("Failed to contact gripper %d"%i)
-
-                else:
-                    stat = GripperStat()
-                    js = JointState()
-                    stat = self._update_gripper_stat(i)
-                    js = self._update_gripper_joint_state(i)
-                    if (1 == self._num_grippers):
-                        self._gripper_pub.publish(stat)
-                        self._gripper_joint_state_pub.publish(js)
+                try:
+                    self._gripper.process_cmds(i)
+                except Exception as e:
+                    if rospy.is_shutdown():
+                        rospy.loginfo("Shutting down Robotiq driver")
                     else:
-                        if (i == 0):
-                            self._left_gripper_pub.publish(stat)
-                            self._left_gripper_joint_state_pub.publish(js)
-                        else:
-                            self._right_gripper_pub.publish(stat)
-                            self._right_gripper_joint_state_pub.publish(js)
+                        rospy.logerr("Robotiq error type: " + str(type(e)))
+                        rospy.logerr("Robotiq communication error: " + str(e))
+
+                stat = self._create_gripper_stat_msg(i)
+                js = self._create_joint_state_msg(i)
+                if (1 == self._num_grippers):
+                    self._gripper_pub.publish(stat)
+                    self._gripper_joint_state_pub.publish(js)
+                else:
+                    if (i == 0):
+                        self._left_gripper_pub.publish(stat)
+                        self._left_gripper_joint_state_pub.publish(js)
+                    else:
+                        self._right_gripper_pub.publish(stat)
+                        self._right_gripper_joint_state_pub.publish(js)
 
             r.sleep()
 
