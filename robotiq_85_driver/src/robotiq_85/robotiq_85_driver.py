@@ -210,8 +210,8 @@ class Robotiq85Driver:
                 success = True
                 success &= self._gripper.process_act_cmd(i)
                 success &= self._gripper.process_stat_cmd(i)
-                if not success:
-                    rospy.logerr("Failed to contact gripper %d"%i)
+                # if not success:
+                #     rospy.logerr("Failed to contact gripper %d"%i)
                 
                 else:
                     stat = GripperStat()
