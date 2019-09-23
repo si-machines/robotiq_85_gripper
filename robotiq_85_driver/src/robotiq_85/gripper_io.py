@@ -3,34 +3,34 @@ COPYRIGHT 2015 Stanley Innovation Inc.
 
 Software License Agreement:
 
-The software supplied herewith by Stanley Innovation Inc. (the "Company") 
-for its licensed Segway RMP Robotic Platforms is intended and supplied to you, 
-the Company's customer, for use solely and exclusively with Stanley Innovation 
-products. The software is owned by the Company and/or its supplier, and is 
-protected under applicable copyright laws.  All rights are reserved. Any use in 
-violation of the foregoing restrictions may subject the user to criminal 
-sanctions under applicable laws, as well as to civil liability for the 
-breach of the terms and conditions of this license. The Company may 
-immediately terminate this Agreement upon your use of the software with 
+The software supplied herewith by Stanley Innovation Inc. (the "Company")
+for its licensed Segway RMP Robotic Platforms is intended and supplied to you,
+the Company's customer, for use solely and exclusively with Stanley Innovation
+products. The software is owned by the Company and/or its supplier, and is
+protected under applicable copyright laws.  All rights are reserved. Any use in
+violation of the foregoing restrictions may subject the user to criminal
+sanctions under applicable laws, as well as to civil liability for the
+breach of the terms and conditions of this license. The Company may
+immediately terminate this Agreement upon your use of the software with
 any products that are not Stanley Innovation products.
 
-The software was written using Python programming language.  Your use 
-of the software is therefore subject to the terms and conditions of the 
-OSI- approved open source license viewable at http://www.python.org/.  
-You are solely responsible for ensuring your compliance with the Python 
+The software was written using Python programming language.  Your use
+of the software is therefore subject to the terms and conditions of the
+OSI- approved open source license viewable at http://www.python.org/.
+You are solely responsible for ensuring your compliance with the Python
 open source license.
 
-You shall indemnify, defend and hold the Company harmless from any claims, 
-demands, liabilities or expenses, including reasonable attorneys fees, incurred 
-by the Company as a result of any claim or proceeding against the Company 
-arising out of or based upon: 
+You shall indemnify, defend and hold the Company harmless from any claims,
+demands, liabilities or expenses, including reasonable attorneys fees, incurred
+by the Company as a result of any claim or proceeding against the Company
+arising out of or based upon:
 
-(i) The combination, operation or use of the software by you with any hardware, 
-    products, programs or data not supplied or approved in writing by the Company, 
-    if such claim or proceeding would have been avoided but for such combination, 
+(i) The combination, operation or use of the software by you with any hardware,
+    products, programs or data not supplied or approved in writing by the Company,
+    if such claim or proceeding would have been avoided but for such combination,
     operation or use.
- 
-(ii) The modification of the software by or on behalf of you 
+
+(ii) The modification of the software by or on behalf of you
 
 (iii) Your use of the software.
 
@@ -40,7 +40,7 @@ arising out of or based upon:
  PARTICULAR PURPOSE APPLY TO THIS SOFTWARE. THE COMPANY SHALL NOT,
  IN ANY CIRCUMSTANCES, BE LIABLE FOR SPECIAL, INCIDENTAL OR
  CONSEQUENTIAL DAMAGES, FOR ANY REASON WHATSOEVER.
- 
+
  \file   gripper_io.py
 
  \brief  Gripper protocol and message definitions
@@ -52,7 +52,7 @@ import numpy as np
 import array
 
 ACTION_REQ_IDX = 7
-POS_INDEX      = 10 
+POS_INDEX      = 10
 SPEED_INDEX    = 11
 FORCE_INDEX    = 12
 
@@ -81,18 +81,18 @@ class GripperIO:
         self.stat_cmd = [self.device, 0x03, 0x07, 0xD0, 0x00, 0x08]
         compute_modbus_rtu_crc(self.stat_cmd)
         self.stat_cmd_bytes = array.array('B',self.stat_cmd).tostring()
-        
+
     def activate_gripper(self):
         self.rACT = 1
         self.rPR = 0
         self.rSP = 255
         self.rFR = 150
         self._update_cmd()
-    
+
     def deactivate_gripper(self):
         self.rACT = 0
         self._update_cmd()
-        
+
     def activate_emergency_release(self,open_gripper=True):
         self.rATR = 1
         self.rARD = 1
@@ -100,7 +100,7 @@ class GripperIO:
         if (open_gripper):
             self.rARD=0
         self._update_cmd()
-                
+
     def deactivate_emergency_release(self):
         self.rATR = 0
         self._update_cmd()
@@ -108,16 +108,16 @@ class GripperIO:
     def goto(self, pos, vel, force):
         self.rACT = 1
         self.rGTO = 1
-        self.rPR = int(np.clip((3.-230.)/0.085 * pos + 230., 0, 255))
-        self.rSP = int(np.clip(255./(0.1-0.013) * vel-0.013, 0, 255))
-        self.rFR = int(np.clip(255./(220.-5.) * force-5., 0, 255))
+        self.rPR = int(np.clip((1-pos)*255, 0, 255))
+        self.rSP = int(np.clip(vel, 0, 255))
+        self.rFR = int(np.clip(force, 0, 255))
         self._update_cmd()
 
     def stop(self):
         self.rACT = 1
         self.rGTO = 0
         self._update_cmd()
-        
+
     def parse_rsp(self,rsp):
         if (verify_modbus_rtu_crc(rsp)):
             self.gACT = rsp[3] & 0x1
@@ -130,7 +130,7 @@ class GripperIO:
             self.gCU  = (rsp[8] & 0xFF)
             return True
         return False
-                
+
     def is_ready(self):
         return self.gSTA == 3 and self.gACT == 1
 
@@ -150,12 +150,10 @@ class GripperIO:
         return self.gFLT
 
     def get_pos(self):
-        po = float(self.gPO)
-        return np.clip(0.085/(3.-230.)*(po-230.), 0, 0.085)
+        return float(self.gPO) / 255
 
     def get_req_pos(self):
-        pr = float(self.gPR)
-        return np.clip(0.085/(3.-230.)*(pr-230.), 0, 0.085)
+        return float(self.gPR) / 255
 
     def get_current(self):
         return self.gCU * 0.1
