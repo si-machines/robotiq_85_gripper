@@ -78,9 +78,9 @@ class Robotiq85Driver:
             return
 
         if (self._num_grippers == 1):
-            rospy.Subscriber("/gripper/cmd", GripperCmd, self._update_gripper_cmd, queue_size=10)
-            self._gripper_pub = rospy.Publisher('/gripper/stat', GripperStat, queue_size=10)
-            self._gripper_joint_state_pub = rospy.Publisher('/gripper/joint_states', JointState, queue_size=10)
+            rospy.Subscriber("~cmd", GripperCmd, self._update_gripper_cmd, queue_size=10)
+            self._gripper_pub = rospy.Publisher('~stat', GripperStat, queue_size=10)
+            self._gripper_joint_state_pub = rospy.Publisher('~joint_states', JointState, queue_size=10)
         elif (self._num_grippers == 2):
             rospy.Subscriber("/left_gripper/cmd", GripperCmd, self._update_gripper_cmd, queue_size=10)
             self._left_gripper_pub = rospy.Publisher('/left_gripper/stat', GripperStat, queue_size=10)

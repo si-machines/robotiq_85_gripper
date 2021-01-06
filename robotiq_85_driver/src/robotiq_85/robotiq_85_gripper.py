@@ -31,7 +31,7 @@ class Robotiq85Gripper:
             rsp = self.ser.read(8)
             rsp = [ord(x) for x in rsp]
             if (len(rsp) != 8):
-                print("response wrong length")
+                print("response wrong length: is " + str(len(rsp)) + ", should be 8")
                 return False
             if not verify_modbus_rtu_crc(rsp):
                 print("cannot verify modbus")
